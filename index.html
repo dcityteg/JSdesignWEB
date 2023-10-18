@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <link rel="icon" href="./favicon.png">
+    <meta name="description" content="网页">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网页</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        #tip {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            z-index: 9999;
+            cursor: pointer;
+            border-radius: 8px;
+            box-shadow: 0px 0px 0px 1px rgba(0, 0, 0, 0.05), 0px 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #tip img {
+            display: block;
+        }
+
+        #content {
+            visibility: hidden;
+        }
+
+        .unchecked-tips {
+            width: 100%;
+            text-align: center;
+            height: 44px;
+            background-color: rgba(255, 149, 79, 0.1);
+            color: rgba(255, 146, 51, 1);
+            line-height: 44px;
+            font-size: 13px;
+            font-weight: 500;
+            position: fixed;
+            top: 0;
+            z-index: 99999;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="content"></div>
+</body>
+
+<script>
+    const log = console.log.bind(console)
+    const e = (sel) => document.querySelector(sel)
+
+    // 获取url参数值
+    const getUrlField = (key) => {
+        let url = location.search.slice(1).split('&')
+        let urlForm = url.reduce((pre, cur) => {
+            let list = cur.split('=')
+            pre[list[0]] = list[1]
+            return pre
+        }, {})
+        return urlForm[key];
+    }
+
+    // 获取url的hash值，#后面的内容
+    const getHashValue = function () {
+        const url = window.location.href
+        if (url.includes('#')) {
+            const v = url.split('#')[1]
+            return decodeURIComponent(v)
+        }
+        return ''
+    }
+
+    // 是否是预发布环境，url参数staging=true标记为预发布环境
+    const isStaging = function () {
+        return getUrlField('staging') === 'true'
+    }
+
+    // 获取后端api前缀
+    const getApi = function () {
+        return isStaging() ? 'https://staging.ds.js.design' : 'https://ds.js.design'
+    }
+
+    // 根据参数id，获取d2c组件url
+    const getUrlXComponent = function () {
+        const id = getUrlField('id');
+        const versionId = getUrlField('versionId')
+        const hashValue = getHashValue()
+        if (versionId) {
+            const accessKey = getUrlField('accessKey')
+            return `${getApi()}/elements/${id}?unionId=${id}&versionId=${versionId}&accessKey=${accessKey}#${hashValue}`; 
+        }
+        return `${getApi()}/elements/${id}#${hashValue}`;
+    }
+
+    // 加载jsframe
+    const loadJsFrame = function () {
+        // 加载js-frame
+        let jsFrameScript = document.createElement('script');
+        jsFrameScript.src = 'https://img.js.design/assets/Resources/xframe/latest/jsframe.js';
+        document.body.appendChild(jsFrameScript);
+    }
+
+    /**
+     * 监听画板切换事件
+    */
+    function addListenerSwitchFrame() {
+        const jsFrame = document.querySelector('js-frame');
+        if (jsFrame) {
+            jsFrame.on('__global__SWITCH_FRAME', function (event) {
+                document.title = event.frameName;
+            })
+        }
+    }
+
+    const addListenerReadyStateChange = function (jsFrame) {
+        const _onceListener = (function () {
+            let _isListener = false;
+            return () => {
+                if (_isListener) return;
+                _isListener = true;
+                addListenerSwitchFrame();
+            }
+        })();
+        jsFrame.addEventListener('jsFrameReadystatechange', function (e) {
+            if (jsFrame.readyState.label === 'inited') {
+                _onceListener();
+            }
+        })
+    }
+
+    // 加载d2c组件
+    const loadXComponent = function (onLoadSuccess) {
+        let id = getUrlField('id');
+        let content = document.getElementById("content");
+        if (id) {
+            let node = document.createElement('js-frame');
+            const src = getUrlXComponent()
+            node.setAttribute('src', src)
+            addListenerReadyStateChange(node);
+            content.appendChild(node);
+        } else {
+            let node = document.createElement('div');
+            node.innerText = '请输入id字段，例如：?id=xxxx';
+            content.appendChild(node);
+        }
+    }
+
+    // 监听hash值，对jsframe src进行更新
+    const listenHashChange = function () {
+        window.addEventListener('hashchange', () => {
+            const jsFrame = document.querySelector('js-frame')
+            if (jsFrame) {
+                jsFrame.setAttribute('src', getUrlXComponent())
+            }
+        })
+    }
+
+    // 监听reload，触发页面刷新
+    const listenReload = function () {
+        window.addEventListener('message', (event) => {
+            if (event.data === 'reload') {
+                location.reload()
+            }
+        }, false)
+    }
+
+    // 小宽度，居中显示
+    const changeContentWidth = function () {
+        const w = window.jsdD2CfirstFrameWidth
+        if (w && w <= 500) {
+            const content = e('#content')
+            content.style = `
+                margin: 0 auto;
+                width: ${w}px;
+            `
+        }
+    }
+
+    /**
+     * 显示内容
+     * */
+    const showContent = function () {
+        const content = e('#content')
+        content.style.visibility = 'visible'
+    }
+ 
+    /**
+     * 是否已经被审核的处理
+     * */
+    function uncheckedHandler() {
+        const accessKey = getUrlField('accessKey');
+        if (accessKey) {
+            const uncheckedEl = document.getElementById('unchecked');
+            if (!uncheckedEl) return;
+            uncheckedEl.style.display = 'block';
+        }
+    }
+
+    const __main = function () {
+        loadJsFrame()
+        loadXComponent()
+        listenHashChange()
+        listenReload()
+        uncheckedHandler()
+
+        window.onload = () => {
+            changeContentWidth()
+            showContent()
+        }
+    }
+
+    __main()
+</script>
+
+</html>
